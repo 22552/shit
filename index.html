@@ -4,37 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f13">
-<title>Still → target WebP</title>
+<title>WebP Converter</title>
 <style>
 :root{color-scheme:dark;--bg:#0d0f13;--card:#171a20;--line:#2b3039;--text:#f6f7fb;--muted:#98a2b3;--a:#ffad1f;--a2:#ff7618;--bad:#ff8787}
-*{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -10%,#262a33 0,transparent 35%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-main{width:min(820px,100%);margin:auto;padding:28px 16px 64px}h1{margin:8px 0;font-size:clamp(30px,8vw,58px);line-height:1;letter-spacing:-.04em}.sub{margin:0 0 20px;color:var(--muted);line-height:1.6}.card{background:#171a20ed;border:1px solid var(--line);border-radius:24px;padding:16px;box-shadow:0 24px 80px #0006}.drop{min-height:280px;border:2px dashed #454c58;border-radius:20px;display:grid;place-items:center;text-align:center;padding:20px;cursor:pointer;overflow:hidden;transition:.15s}.drop.drag{border-color:var(--a);background:#ffad1f0b}.drop img{display:none;max-width:100%;max-height:430px;width:auto;height:auto;object-fit:contain;border-radius:14px}.drop.has img{display:block}.drop.has .empty{display:none}input[type=file]{display:none}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}button,a{border:0;border-radius:999px;padding:13px 18px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}button{flex:1;min-width:210px;background:linear-gradient(135deg,var(--a),var(--a2));color:#171007}button:disabled{opacity:.45;cursor:not-allowed}.download{display:none;background:#f0f3f7;color:#111}.status{min-height:1.5em;margin-top:12px;color:var(--muted);word-break:break-word}.spec{margin-top:14px;padding:13px;border:1px solid var(--line);border-radius:16px;background:#101318;color:#b8c1cd;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow:auto}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -10%,#262a33 0,transparent 35%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:grid;place-items:center}
+main{width:min(720px,100%);padding:16px}
+.card{background:#171a20ed;border:1px solid var(--line);border-radius:24px;padding:16px;box-shadow:0 24px 80px #0006}
+.drop{min-height:300px;border:2px dashed #454c58;border-radius:20px;display:grid;place-items:center;text-align:center;padding:20px;cursor:pointer;overflow:hidden;transition:.15s}
+.drop.drag{border-color:var(--a);background:#ffad1f0b}
+.drop img{display:none;max-width:100%;max-height:65dvh;width:auto;height:auto;object-fit:contain;border-radius:14px}
+.drop.has img{display:block}.drop.has .empty{display:none}
+input[type=file]{display:none}
+.empty{color:var(--muted);font-weight:700}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+button,a{border:0;border-radius:999px;padding:13px 18px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}
+button{flex:1;min-width:180px;background:linear-gradient(135deg,var(--a),var(--a2));color:#171007}
+button:disabled{opacity:.45;cursor:not-allowed}
+.download{display:none;background:#f0f3f7;color:#111}
+.status{min-height:1.3em;margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
 </style>
 </head>
 <body>
 <main>
-<h1>Still → target WebP</h1>
-<p class="sub">静止画を、参照画像と同じ WebP コンテナ構造にします。見た目は静止画のまま、内部は2フレームです。</p>
 <section class="card">
 <label id="drop" class="drop" for="file">
 <input id="file" type="file" accept="image/*">
-<div class="empty"><div style="font-size:44px">🖼️</div><strong>画像をタップ / ドロップ</strong><br><span style="color:var(--muted)">PNG / JPEG / WebP など</span></div>
-<img id="preview" alt="選択した画像のプレビュー">
+<div class="empty">画像を選択</div>
+<img id="preview" alt="">
 </label>
-<div class="actions"><button id="convert" disabled>この形式に変換</button><a id="download" class="download">保存</a></div>
-<div id="status" class="status">画像を選んでください。</div>
-<div id="spec" class="spec">target header:
-RIFF / WEBP
-VP8X flags = 0x12 (alpha + animation)
-ANIM bg = FF FF FF FF, loop = 0
-ANMF #1 = full canvas, 100 ms, flags 0x02, VP8L
-ANMF #2 = bottom-right 1×2 transparent frame, 100 ms, flags 0x00, VP8L</div>
+<div class="actions">
+<button id="convert" disabled>変換</button>
+<a id="download" class="download">保存</a>
+</div>
+<div id="status" class="status"></div>
 </section>
 </main>
 <script type="module">
 const $=s=>document.querySelector(s);
-const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status'),spec=$('#spec');
-let sourceFile=null, sourceImage=null, inputURL=null, outputURL=null, encoderPromise=null;
+const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status');
+let sourceFile=null,sourceImage=null,inputURL=null,outputURL=null,encoderPromise=null;
 
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
 ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('drag')}));
@@ -43,40 +52,23 @@ file.addEventListener('change',()=>{const f=file.files?.[0];if(f)load(f)});
 
 function msg(s,bad=false){status.textContent=s;status.style.color=bad?'var(--bad)':''}
 function load(f){
-  if(!f.type.startsWith('image/'))return msg('画像ファイルを選んでください。',true);
-
-  sourceFile=f;
-  convert.disabled=true;
-  download.style.display='none';
-
+  if(!f.type.startsWith('image/'))return msg('画像を選んでください',true);
+  sourceFile=f;convert.disabled=true;download.style.display='none';msg('');
   if(inputURL)URL.revokeObjectURL(inputURL);
   inputURL=URL.createObjectURL(f);
-
-  // Preview first. No createImageBitmap and no CDN import is needed here,
-  // so this works on iOS/WebKit even if the encoder has not loaded yet.
   preview.onload=()=>{
     sourceImage=preview;
-    if(preview.naturalHeight<2){
-      msg('高さ2px以上の画像が必要です',true);
-      return;
-    }
-    drop.classList.add('has');
-    convert.disabled=false;
-    msg(`${preview.naturalWidth}×${preview.naturalHeight}px / ${(f.size/1024).toFixed(1)} KiB`);
+    if(preview.naturalHeight<2)return msg('この画像は変換できません',true);
+    drop.classList.add('has');convert.disabled=false;msg('');
   };
-  preview.onerror=()=>{
-    sourceImage=null;
-    drop.classList.remove('has');
-    msg('画像を表示できませんでした。別の画像形式で試してください。',true);
-  };
+  preview.onerror=()=>{sourceImage=null;drop.classList.remove('has');msg('画像を読み込めません',true)};
   preview.src=inputURL;
 }
 
 async function getEncoder(){
   if(!encoderPromise){
     encoderPromise=import('https://esm.sh/@jsquash/webp@1.5.0').then(m=>m.default).catch(e=>{
-      encoderPromise=null;
-      throw new Error('WebPエンコーダの読み込みに失敗しました: '+(e?.message||e));
+      encoderPromise=null;throw new Error('変換処理を読み込めません');
     });
   }
   return encoderPromise;
@@ -89,13 +81,11 @@ function cat(...xs){const n=xs.reduce((a,b)=>a+b.length,0),o=new Uint8Array(n);l
 function chunk(tag,payload){return cat(ascii(tag),u32(payload.length),payload,(payload.length&1)?new Uint8Array([0]):new Uint8Array())}
 function tagAt(a,o){return String.fromCharCode(a[o],a[o+1],a[o+2],a[o+3])}
 function fromHex(s){return new Uint8Array(s.match(/../g).map(x=>parseInt(x,16)))}
-
-// Exact second ANMF inner VP8L chunk from the reference image: 1×2 fully transparent.
 const tinyTransparentVP8L=fromHex('5650384c130000002f004000100f30ace33f19f31ff0988088fe8700');
 
 function extractVP8L(buffer){
   const a=new Uint8Array(buffer);
-  if(tagAt(a,0)!=='RIFF'||tagAt(a,8)!=='WEBP')throw new Error('WebP encoder returned an invalid file');
+  if(tagAt(a,0)!=='RIFF'||tagAt(a,8)!=='WEBP')throw new Error('変換失敗');
   let o=12;
   while(o+8<=a.length){
     const tag=tagAt(a,o),size=new DataView(a.buffer,a.byteOffset+o+4,4).getUint32(0,true),end=o+8+size;
@@ -103,23 +93,18 @@ function extractVP8L(buffer){
     if(tag==='VP8L')return a.slice(o,end+(size&1));
     o=end+(size&1);
   }
-  throw new Error('VP8L が出ませんでした');
+  throw new Error('変換失敗');
 }
 
 function buildTargetWebP(firstVP8L,w,h){
-  if(w<1||h<2||w>16777216||h>16777216)throw new Error('画像サイズが対象形式の範囲外です');
-
+  if(w<1||h<2||w>16777216||h>16777216)throw new Error('この画像は変換できません');
   const vp8x=cat(new Uint8Array([0x12,0,0,0]),u24(w-1),u24(h-1));
   const anim=new Uint8Array([0xff,0xff,0xff,0xff,0x00,0x00]);
-
   const firstHeader=cat(u24(0),u24(0),u24(w-1),u24(h-1),u24(100),new Uint8Array([0x02]));
   const first=chunk('ANMF',cat(firstHeader,firstVP8L));
-
-  const xPx=(w-1)&~1;
-  const yPx=(h-2)&~1;
+  const xPx=(w-1)&~1,yPx=(h-2)&~1;
   const secondHeader=cat(u24(xPx>>>1),u24(yPx>>>1),u24(0),u24(1),u24(100),new Uint8Array([0x00]));
   const second=chunk('ANMF',cat(secondHeader,tinyTransparentVP8L));
-
   const body=cat(chunk('VP8X',vp8x),chunk('ANIM',anim),first,second);
   const payload=cat(ascii('WEBP'),body);
   return new Blob([ascii('RIFF'),u32(payload.length),payload],{type:'image/webp'});
@@ -127,7 +112,7 @@ function buildTargetWebP(firstVP8L,w,h){
 
 convert.addEventListener('click',async()=>{
   if(!sourceImage||!sourceImage.complete||!sourceImage.naturalWidth)return;
-  convert.disabled=true;download.style.display='none';msg('lossless VP8L で変換中…');
+  convert.disabled=true;download.style.display='none';msg('変換中…');
   try{
     const encodeWebP=await getEncoder();
     const w=sourceImage.naturalWidth,h=sourceImage.naturalHeight;
@@ -135,19 +120,12 @@ convert.addEventListener('click',async()=>{
     const ctx=c.getContext('2d',{alpha:true,willReadFrequently:true});
     ctx.clearRect(0,0,w,h);ctx.drawImage(sourceImage,0,0,w,h);
     const imageData=ctx.getImageData(0,0,w,h);
-
     const staticBuffer=await encodeWebP(imageData,{lossless:1,quality:100,method:6,exact:1,near_lossless:100,alpha_quality:100});
-    const firstVP8L=extractVP8L(staticBuffer);
-    const blob=buildTargetWebP(firstVP8L,w,h);
-
+    const blob=buildTargetWebP(extractVP8L(staticBuffer),w,h);
     if(outputURL)URL.revokeObjectURL(outputURL);outputURL=URL.createObjectURL(blob);
     const base=(sourceFile?.name||'image').replace(/\.[^.]+$/,'');
-    download.href=outputURL;download.download=`${base}_target.webp`;download.textContent=`保存 (${(blob.size/1024).toFixed(1)} KiB)`;download.style.display='inline-block';
-
-    const xPx=(w-1)&~1,yPx=(h-2)&~1;
-    spec.textContent=`output header:\nRIFF / WEBP\nVP8X  size=10 flags=0x12 canvas=${w}×${h}\nANIM  size=6 bg=FFFFFFFF loop=0\nANMF #1 x=0 y=0 ${w}×${h} duration=100 flags=0x02 inner=VP8L\nANMF #2 x=${xPx} y=${yPx} 1×2 duration=100 flags=0x00 inner=VP8L`;
-    msg('完成。参照画像と同じ2フレーム構造です。');
-  }catch(e){console.error(e);msg(e?.message||String(e),true)}finally{convert.disabled=false}
+    download.href=outputURL;download.download=`${base}.webp`;download.style.display='inline-block';msg('');
+  }catch(e){console.error(e);msg(e?.message||'変換失敗',true)}finally{convert.disabled=false}
 });
 </script>
 </body>
