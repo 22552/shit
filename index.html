@@ -8,18 +8,18 @@
 <style>
 :root{color-scheme:dark;--bg:#0d0f13;--card:#171a20;--line:#2b3039;--text:#f6f7fb;--muted:#98a2b3;--a:#ffad1f;--a2:#ff7618;--bad:#ff8787}
 *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -10%,#262a33 0,transparent 35%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-main{width:min(820px,100%);margin:auto;padding:28px 16px 64px}h1{margin:8px 0;font-size:clamp(30px,8vw,58px);line-height:1;letter-spacing:-.04em}.sub{margin:0 0 20px;color:var(--muted);line-height:1.6}.card{background:#171a20ed;border:1px solid var(--line);border-radius:24px;padding:16px;box-shadow:0 24px 80px #0006}.drop{min-height:280px;border:2px dashed #454c58;border-radius:20px;display:grid;place-items:center;text-align:center;padding:20px;cursor:pointer;overflow:hidden;transition:.15s}.drop.drag{border-color:var(--a);background:#ffad1f0b}.drop img{display:none;max-width:100%;max-height:430px;border-radius:14px}.drop.has img{display:block}.drop.has .empty{display:none}input{display:none}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}button,a{border:0;border-radius:999px;padding:13px 18px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}button{flex:1;min-width:210px;background:linear-gradient(135deg,var(--a),var(--a2));color:#171007}button:disabled{opacity:.45;cursor:not-allowed}.download{display:none;background:#f0f3f7;color:#111}.status{min-height:1.5em;margin-top:12px;color:var(--muted);word-break:break-word}.spec{margin-top:14px;padding:13px;border:1px solid var(--line);border-radius:16px;background:#101318;color:#b8c1cd;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow:auto}
+main{width:min(820px,100%);margin:auto;padding:28px 16px 64px}h1{margin:8px 0;font-size:clamp(30px,8vw,58px);line-height:1;letter-spacing:-.04em}.sub{margin:0 0 20px;color:var(--muted);line-height:1.6}.card{background:#171a20ed;border:1px solid var(--line);border-radius:24px;padding:16px;box-shadow:0 24px 80px #0006}.drop{min-height:280px;border:2px dashed #454c58;border-radius:20px;display:grid;place-items:center;text-align:center;padding:20px;cursor:pointer;overflow:hidden;transition:.15s}.drop.drag{border-color:var(--a);background:#ffad1f0b}.drop img{display:none;max-width:100%;max-height:430px;width:auto;height:auto;object-fit:contain;border-radius:14px}.drop.has img{display:block}.drop.has .empty{display:none}input[type=file]{display:none}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}button,a{border:0;border-radius:999px;padding:13px 18px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}button{flex:1;min-width:210px;background:linear-gradient(135deg,var(--a),var(--a2));color:#171007}button:disabled{opacity:.45;cursor:not-allowed}.download{display:none;background:#f0f3f7;color:#111}.status{min-height:1.5em;margin-top:12px;color:var(--muted);word-break:break-word}.spec{margin-top:14px;padding:13px;border:1px solid var(--line);border-radius:16px;background:#101318;color:#b8c1cd;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow:auto}
 </style>
 </head>
 <body>
 <main>
 <h1>Still → target WebP</h1>
-<p class="sub">静止画を、さっき送った画像と同じ WebP コンテナ構造にします。見た目は静止画のまま、内部は2フレームです。</p>
+<p class="sub">静止画を、参照画像と同じ WebP コンテナ構造にします。見た目は静止画のまま、内部は2フレームです。</p>
 <section class="card">
-<label id="drop" class="drop">
+<label id="drop" class="drop" for="file">
 <input id="file" type="file" accept="image/*">
 <div class="empty"><div style="font-size:44px">🖼️</div><strong>画像をタップ / ドロップ</strong><br><span style="color:var(--muted)">PNG / JPEG / WebP など</span></div>
-<img id="preview" alt="preview">
+<img id="preview" alt="選択した画像のプレビュー">
 </label>
 <div class="actions"><button id="convert" disabled>この形式に変換</button><a id="download" class="download">保存</a></div>
 <div id="status" class="status">画像を選んでください。</div>
@@ -32,29 +32,54 @@ ANMF #2 = bottom-right 1×2 transparent frame, 100 ms, flags 0x00, VP8L</div>
 </section>
 </main>
 <script type="module">
-import encodeWebP from "https://esm.sh/@jsquash/webp@1.5.0";
-
 const $=s=>document.querySelector(s);
 const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status'),spec=$('#spec');
-let sourceFile=null, bitmap=null, outputURL=null;
+let sourceFile=null, sourceImage=null, inputURL=null, outputURL=null, encoderPromise=null;
 
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
 ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('drag')}));
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files?.[0];if(f)load(f)});
-file.addEventListener('change',()=>file.files?.[0]&&load(file.files[0]));
+file.addEventListener('change',()=>{const f=file.files?.[0];if(f)load(f)});
 
 function msg(s,bad=false){status.textContent=s;status.style.color=bad?'var(--bad)':''}
-async function load(f){
+function load(f){
   if(!f.type.startsWith('image/'))return msg('画像ファイルを選んでください。',true);
-  try{
-    if(bitmap?.close)bitmap.close();
-    bitmap=await createImageBitmap(f);
-    if(bitmap.height<2)throw new Error('高さ2px以上の画像が必要です');
-    sourceFile=f;
-    const u=URL.createObjectURL(f);preview.src=u;preview.onload=()=>URL.revokeObjectURL(u);
-    drop.classList.add('has');convert.disabled=false;download.style.display='none';
-    msg(`${bitmap.width}×${bitmap.height}px / ${(f.size/1024).toFixed(1)} KiB`);
-  }catch(e){msg(e?.message||String(e),true)}
+
+  sourceFile=f;
+  convert.disabled=true;
+  download.style.display='none';
+
+  if(inputURL)URL.revokeObjectURL(inputURL);
+  inputURL=URL.createObjectURL(f);
+
+  // Preview first. No createImageBitmap and no CDN import is needed here,
+  // so this works on iOS/WebKit even if the encoder has not loaded yet.
+  preview.onload=()=>{
+    sourceImage=preview;
+    if(preview.naturalHeight<2){
+      msg('高さ2px以上の画像が必要です',true);
+      return;
+    }
+    drop.classList.add('has');
+    convert.disabled=false;
+    msg(`${preview.naturalWidth}×${preview.naturalHeight}px / ${(f.size/1024).toFixed(1)} KiB`);
+  };
+  preview.onerror=()=>{
+    sourceImage=null;
+    drop.classList.remove('has');
+    msg('画像を表示できませんでした。別の画像形式で試してください。',true);
+  };
+  preview.src=inputURL;
+}
+
+async function getEncoder(){
+  if(!encoderPromise){
+    encoderPromise=import('https://esm.sh/@jsquash/webp@1.5.0').then(m=>m.default).catch(e=>{
+      encoderPromise=null;
+      throw new Error('WebPエンコーダの読み込みに失敗しました: '+(e?.message||e));
+    });
+  }
+  return encoderPromise;
 }
 
 function ascii(s){return new TextEncoder().encode(s)}
@@ -87,18 +112,12 @@ function buildTargetWebP(firstVP8L,w,h){
   const vp8x=cat(new Uint8Array([0x12,0,0,0]),u24(w-1),u24(h-1));
   const anim=new Uint8Array([0xff,0xff,0xff,0xff,0x00,0x00]);
 
-  const firstHeader=cat(
-    u24(0),u24(0),u24(w-1),u24(h-1),u24(100),new Uint8Array([0x02])
-  );
+  const firstHeader=cat(u24(0),u24(0),u24(w-1),u24(h-1),u24(100),new Uint8Array([0x02]));
   const first=chunk('ANMF',cat(firstHeader,firstVP8L));
 
-  // ANMF x/y are stored in units of 2 pixels. Put the 1×2 transparent frame
-  // as far bottom-right as possible, matching the reference file's layout.
   const xPx=(w-1)&~1;
   const yPx=(h-2)&~1;
-  const secondHeader=cat(
-    u24(xPx>>>1),u24(yPx>>>1),u24(0),u24(1),u24(100),new Uint8Array([0x00])
-  );
+  const secondHeader=cat(u24(xPx>>>1),u24(yPx>>>1),u24(0),u24(1),u24(100),new Uint8Array([0x00]));
   const second=chunk('ANMF',cat(secondHeader,tinyTransparentVP8L));
 
   const body=cat(chunk('VP8X',vp8x),chunk('ANIM',anim),first,second);
@@ -107,23 +126,26 @@ function buildTargetWebP(firstVP8L,w,h){
 }
 
 convert.addEventListener('click',async()=>{
-  if(!bitmap)return;
+  if(!sourceImage||!sourceImage.complete||!sourceImage.naturalWidth)return;
   convert.disabled=true;download.style.display='none';msg('lossless VP8L で変換中…');
   try{
-    const c=document.createElement('canvas');c.width=bitmap.width;c.height=bitmap.height;
-    const ctx=c.getContext('2d',{alpha:true,willReadFrequently:true});ctx.drawImage(bitmap,0,0);
-    const imageData=ctx.getImageData(0,0,c.width,c.height);
+    const encodeWebP=await getEncoder();
+    const w=sourceImage.naturalWidth,h=sourceImage.naturalHeight;
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    const ctx=c.getContext('2d',{alpha:true,willReadFrequently:true});
+    ctx.clearRect(0,0,w,h);ctx.drawImage(sourceImage,0,0,w,h);
+    const imageData=ctx.getImageData(0,0,w,h);
 
     const staticBuffer=await encodeWebP(imageData,{lossless:1,quality:100,method:6,exact:1,near_lossless:100,alpha_quality:100});
     const firstVP8L=extractVP8L(staticBuffer);
-    const blob=buildTargetWebP(firstVP8L,c.width,c.height);
+    const blob=buildTargetWebP(firstVP8L,w,h);
 
     if(outputURL)URL.revokeObjectURL(outputURL);outputURL=URL.createObjectURL(blob);
     const base=(sourceFile?.name||'image').replace(/\.[^.]+$/,'');
     download.href=outputURL;download.download=`${base}_target.webp`;download.textContent=`保存 (${(blob.size/1024).toFixed(1)} KiB)`;download.style.display='inline-block';
 
-    const xPx=(c.width-1)&~1,yPx=(c.height-2)&~1;
-    spec.textContent=`output header:\nRIFF / WEBP\nVP8X  size=10 flags=0x12 canvas=${c.width}×${c.height}\nANIM  size=6 bg=FFFFFFFF loop=0\nANMF #1 x=0 y=0 ${c.width}×${c.height} duration=100 flags=0x02 inner=VP8L\nANMF #2 x=${xPx} y=${yPx} 1×2 duration=100 flags=0x00 inner=VP8L`;
+    const xPx=(w-1)&~1,yPx=(h-2)&~1;
+    spec.textContent=`output header:\nRIFF / WEBP\nVP8X  size=10 flags=0x12 canvas=${w}×${h}\nANIM  size=6 bg=FFFFFFFF loop=0\nANMF #1 x=0 y=0 ${w}×${h} duration=100 flags=0x02 inner=VP8L\nANMF #2 x=${xPx} y=${yPx} 1×2 duration=100 flags=0x00 inner=VP8L`;
     msg('完成。参照画像と同じ2フレーム構造です。');
   }catch(e){console.error(e);msg(e?.message||String(e),true)}finally{convert.disabled=false}
 });
