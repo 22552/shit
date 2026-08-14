@@ -67,8 +67,14 @@ function load(f){
 
 async function getEncoder(){
   if(!encoderPromise){
-    encoderPromise=import('https://esm.sh/@jsquash/webp@1.5.0').then(m=>m.default).catch(e=>{
-      encoderPromise=null;throw new Error('変換処理を読み込めません');
+    encoderPromise=import('https://esm.sh/@jsquash/webp@1.5.0').then(m=>{
+      const encode=m.encode ?? m.default?.encode ?? (typeof m.default==='function'?m.default:null);
+      if(typeof encode!=='function')throw new Error('WebP encoder export not found');
+      return encode;
+    }).catch(e=>{
+      encoderPromise=null;
+      console.error(e);
+      throw new Error('変換処理を読み込めません');
     });
   }
   return encoderPromise;
