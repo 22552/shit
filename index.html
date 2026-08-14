@@ -23,6 +23,8 @@ button{flex:1;min-width:180px;background:linear-gradient(135deg,var(--a),var(--a
 button:disabled{opacity:.45;cursor:not-allowed}
 .download{display:none;background:#f0f3f7;color:#111}
 .status{min-height:1.3em;margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
+.gh{position:fixed;right:10px;bottom:8px;padding:3px 5px;color:#707887;font-size:10px;font-weight:500;opacity:.65}
+.gh:hover{opacity:1;color:#aeb6c3}
 </style>
 </head>
 <body>
@@ -40,6 +42,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div id="status" class="status"></div>
 </section>
 </main>
+<a class="gh" href="https://github.com/22552" target="_blank" rel="noopener noreferrer">22552</a>
 <script type="module">
 const $=s=>document.querySelector(s);
 const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status');
