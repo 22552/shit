@@ -56,16 +56,19 @@ file.addEventListener('change',()=>{const f=file.files?.[0];if(f)load(f)});
 function msg(s,bad=false){status.textContent=s;status.style.color=bad?'var(--bad)':''}
 function load(f){
   if(!f.type.startsWith('image/'))return msg('画像を選んでください',true);
-  sourceFile=f;convert.disabled=true;download.style.display='none';msg('');
+  sourceFile=f;sourceImage=null;convert.disabled=true;download.style.display='none';msg('');
+  if(outputURL){URL.revokeObjectURL(outputURL);outputURL=null}
   if(inputURL)URL.revokeObjectURL(inputURL);
   inputURL=URL.createObjectURL(f);
-  preview.onload=()=>{
-    sourceImage=preview;
-    if(preview.naturalHeight<2)return msg('この画像は変換できません',true);
+  preview.src=inputURL;
+  const img=new Image();
+  img.onload=()=>{
+    if(img.naturalHeight<2)return msg('この画像は変換できません',true);
+    sourceImage=img;
     drop.classList.add('has');convert.disabled=false;msg('');
   };
-  preview.onerror=()=>{sourceImage=null;drop.classList.remove('has');msg('画像を読み込めません',true)};
-  preview.src=inputURL;
+  img.onerror=()=>{sourceImage=null;drop.classList.remove('has');msg('画像を読み込めません',true)};
+  img.src=inputURL;
 }
 
 async function getEncoder(){
@@ -133,7 +136,10 @@ convert.addEventListener('click',async()=>{
     const blob=buildTargetWebP(extractVP8L(staticBuffer),w,h);
     if(outputURL)URL.revokeObjectURL(outputURL);outputURL=URL.createObjectURL(blob);
     const base=(sourceFile?.name||'image').replace(/\.[^.]+$/,'');
-    download.href=outputURL;download.download=`${base}.webp`;download.style.display='inline-block';msg('');
+    download.href=outputURL;download.download=`${base}.webp`;download.style.display='inline-block';
+    preview.src=outputURL;
+    drop.classList.add('has');
+    msg('');
   }catch(e){console.error(e);msg(e?.message||'変換失敗',true)}finally{convert.disabled=false}
 });
 </script>
