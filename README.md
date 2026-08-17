@@ -1,1 +1,3 @@
-らいせんすMIT
+らいせんす GPL-3.0-only
+
+GNU General Public License v3.0 only
