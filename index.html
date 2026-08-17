@@ -17,6 +17,13 @@ main{width:min(720px,100%);padding:16px}
 .drop.has img{display:block}.drop.has .empty{display:none}
 input[type=file]{display:none}
 .empty{color:var(--muted);font-weight:700}
+.advanced{margin-top:12px;border:1px solid var(--line);border-radius:16px;background:#11141a}
+.advanced summary{padding:13px 15px;cursor:pointer;font-weight:800;user-select:none}
+.setting{padding:0 15px 15px}
+.setting-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;color:var(--muted);font-size:13px;font-weight:700}
+.setting-head output{color:var(--text);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--a)}
+.hint{margin-top:6px;color:#747e8e;font-size:11px}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 button,a{border:0;border-radius:999px;padding:13px 18px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}
 button{flex:1;min-width:180px;background:linear-gradient(135deg,var(--a),var(--a2));color:#171007}
@@ -35,6 +42,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div class="empty">画像を選択</div>
 <img id="preview" alt="">
 </label>
+<details class="advanced">
+<summary>詳細設定</summary>
+<div class="setting">
+<div class="setting-head">
+<label for="quality">品質</label>
+<output id="qualityValue" for="quality">100</output>
+</div>
+<input id="quality" type="range" min="0" max="100" step="1" value="100">
+<div class="hint">100で元画像に最も近く、下げるほど圧縮を強くします。</div>
+</div>
+</details>
 <div class="actions">
 <button id="convert" disabled>変換</button>
 <a id="download" class="download">保存</a>
@@ -45,13 +63,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <a class="gh" href="https://github.com/22552" target="_blank" rel="noopener noreferrer">22552</a>
 <script type="module">
 const $=s=>document.querySelector(s);
-const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status');
+const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status'),quality=$('#quality'),qualityValue=$('#qualityValue');
 let sourceFile=null,sourceImage=null,inputURL=null,outputURL=null,encoderPromise=null;
 
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
 ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('drag')}));
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files?.[0];if(f)load(f)});
 file.addEventListener('change',()=>{const f=file.files?.[0];if(f)load(f)});
+quality.addEventListener('input',()=>{qualityValue.value=quality.value});
 
 function msg(s,bad=false){status.textContent=s;status.style.color=bad?'var(--bad)':''}
 function load(f){
@@ -128,11 +147,12 @@ convert.addEventListener('click',async()=>{
   try{
     const encodeWebP=await getEncoder();
     const w=sourceImage.naturalWidth,h=sourceImage.naturalHeight;
+    const q=Math.max(0,Math.min(100,Number(quality.value)||0));
     const c=document.createElement('canvas');c.width=w;c.height=h;
     const ctx=c.getContext('2d',{alpha:true,willReadFrequently:true});
     ctx.clearRect(0,0,w,h);ctx.drawImage(sourceImage,0,0,w,h);
     const imageData=ctx.getImageData(0,0,w,h);
-    const staticBuffer=await encodeWebP(imageData,{lossless:1,quality:100,method:6,exact:1,near_lossless:100,alpha_quality:100});
+    const staticBuffer=await encodeWebP(imageData,{lossless:1,quality:q,method:6,exact:1,near_lossless:q,alpha_quality:100});
     const blob=buildTargetWebP(extractVP8L(staticBuffer),w,h);
     if(outputURL)URL.revokeObjectURL(outputURL);outputURL=URL.createObjectURL(blob);
     const base=(sourceFile?.name||'image').replace(/\.[^.]+$/,'');
