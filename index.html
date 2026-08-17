@@ -18,11 +18,14 @@ main{width:min(720px,100%);padding:16px}
 input[type=file]{display:none}
 .empty{color:var(--muted);font-weight:700}
 .advanced{margin-top:12px;border:1px solid var(--line);border-radius:16px;background:#11141a}
-.advanced summary{padding:13px 15px;cursor:pointer;font-weight:800;user-select:none}
+.advanced summary{padding:13px 15px;cursor:pointer;font-weight:800;user-select:none;color:var(--muted)}
 .setting{padding:0 15px 15px}
+.setting+.setting{padding-top:2px}
 .setting-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;color:var(--muted);font-size:13px;font-weight:700}
 .setting-head output{color:var(--text);font-variant-numeric:tabular-nums}
 input[type=range]{width:100%;accent-color:var(--a)}
+.check-setting{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}
+.check-setting input{width:17px;height:17px;margin:0;accent-color:var(--a)}
 .hint{margin-top:6px;color:#747e8e;font-size:11px}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 button,a{border:0;border-radius:999px;padding:13px 18px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}
@@ -42,6 +45,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div class="empty">画像を選択</div>
 <img id="preview" alt="">
 </label>
+<div class="actions">
+<button id="convert" disabled>変換</button>
+<a id="download" class="download">保存</a>
+</div>
 <details class="advanced">
 <summary>詳細設定</summary>
 <div class="setting">
@@ -52,18 +59,21 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <input id="quality" type="range" min="0" max="100" step="1" value="100">
 <div class="hint">100で元画像に最も近く、下げるほど圧縮を強くします。</div>
 </div>
-</details>
-<div class="actions">
-<button id="convert" disabled>変換</button>
-<a id="download" class="download">保存</a>
+<div class="setting">
+<label class="check-setting" for="resize450">
+<input id="resize450" type="checkbox">
+<span>450×450以内に自動縮小</span>
+</label>
+<div class="hint">縦横比を維持し、450pxを超える画像だけ縮小します。</div>
 </div>
+</details>
 <div id="status" class="status"></div>
 </section>
 </main>
 <a class="gh" href="https://github.com/22552" target="_blank" rel="noopener noreferrer">22552</a>
 <script type="module">
 const $=s=>document.querySelector(s);
-const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status'),quality=$('#quality'),qualityValue=$('#qualityValue');
+const file=$('#file'),drop=$('#drop'),preview=$('#preview'),convert=$('#convert'),download=$('#download'),status=$('#status'),quality=$('#quality'),qualityValue=$('#qualityValue'),resize450=$('#resize450');
 let sourceFile=null,sourceImage=null,inputURL=null,outputURL=null,encoderPromise=null;
 
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
@@ -146,10 +156,16 @@ convert.addEventListener('click',async()=>{
   convert.disabled=true;download.style.display='none';msg('変換中…');
   try{
     const encodeWebP=await getEncoder();
-    const w=sourceImage.naturalWidth,h=sourceImage.naturalHeight;
+    let w=sourceImage.naturalWidth,h=sourceImage.naturalHeight;
+    if(resize450.checked&&(w>450||h>450)){
+      const scale=Math.min(450/w,450/h);
+      w=Math.max(1,Math.round(w*scale));
+      h=Math.max(2,Math.round(h*scale));
+    }
     const q=Math.max(0,Math.min(100,Number(quality.value)||0));
     const c=document.createElement('canvas');c.width=w;c.height=h;
     const ctx=c.getContext('2d',{alpha:true,willReadFrequently:true});
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
     ctx.clearRect(0,0,w,h);ctx.drawImage(sourceImage,0,0,w,h);
     const imageData=ctx.getImageData(0,0,w,h);
     const staticBuffer=await encodeWebP(imageData,{lossless:1,quality:q,method:6,exact:1,near_lossless:q,alpha_quality:100});
