@@ -66,11 +66,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div class="hint">100で元画像に最も近く、下げるほど圧縮を強くします。</div>
 </div>
 <div class="setting">
-<label class="check-setting" for="resize450">
-<input id="resize450" type="checkbox">
-<span>450×450以内に自動縮小</span>
+<label class="check-setting" for="resize480">
+<input id="resize480" type="checkbox">
+<span>480×480以内に自動縮小</span>
 </label>
-<div class="hint">縦横比を維持し、450pxを超える画像だけ縮小します。</div>
+<div class="hint">縦横比を維持し、480pxを超える画像だけ縮小します。</div>
 </div>
 </details>
 <div id="status" class="status"></div>
@@ -79,7 +79,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <a class="gh" href="https://github.com/22552" target="_blank" rel="noopener noreferrer">22552</a>
 <script type="module">
 const $=s=>document.querySelector(s);
-const file=$('#file'),drop=$('#drop'),preview=$('#preview'),resetImage=$('#resetImage'),convert=$('#convert'),download=$('#download'),status=$('#status'),quality=$('#quality'),qualityValue=$('#qualityValue'),resize450=$('#resize450');
+const file=$('#file'),drop=$('#drop'),preview=$('#preview'),resetImage=$('#resetImage'),convert=$('#convert'),download=$('#download'),status=$('#status'),quality=$('#quality'),qualityValue=$('#qualityValue'),resize480=$('#resize480');
 let sourceFile=null,sourceImage=null,inputURL=null,outputURL=null,encoderPromise=null;
 
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
@@ -170,8 +170,8 @@ convert.addEventListener('click',async()=>{
   try{
     const encodeWebP=await getEncoder();
     let w=sourceImage.naturalWidth,h=sourceImage.naturalHeight;
-    if(resize450.checked&&(w>450||h>450)){
-      const scale=Math.min(450/w,450/h);
+    if(resize480.checked&&(w>480||h>480)){
+      const scale=Math.min(480/w,480/h);
       w=Math.max(1,Math.round(w*scale));
       h=Math.max(2,Math.round(h*scale));
     }
