@@ -47,7 +47,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <button id="convert" disabled>変換</button>
 <a id="download" class="download">保存</a>
 </div>
-<div class="note">縦横比を維持し、480pxを超えるGIFは自動縮小します。</div>
+<div class="note">最大480×480 / 品質80固定 / 出力512KB以下のみ保存できます。</div>
 <div id="status" class="status"></div>
 </section>
 </main>
@@ -55,6 +55,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script type="module">
 const $=s=>document.querySelector(s);
 const file=$('#file'),drop=$('#drop'),preview=$('#preview'),resetImage=$('#resetImage'),convert=$('#convert'),download=$('#download'),status=$('#status');
+const MAX_OUTPUT_SIZE=512*1024;
+const WEBP_QUALITY=80;
 let sourceFile=null,inputURL=null,outputURL=null,libsPromise=null;
 
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
@@ -195,7 +197,7 @@ convert.addEventListener('click',async()=>{
       msg(`変換中… ${i+1}/${frames.length}`);
       await new Promise(requestAnimationFrame);
       const imageData=outCtx.getImageData(0,0,w,h);
-      const staticBuffer=await encode(imageData,{lossless:1,quality:100,method:4,exact:1,near_lossless:100,alpha_quality:100});
+      const staticBuffer=await encode(imageData,{lossless:1,quality:WEBP_QUALITY,method:4,exact:1,near_lossless:WEBP_QUALITY,alpha_quality:100});
       encoded.push({vp8l:extractVP8L(staticBuffer),duration:frame.delay||100});
 
       previousDisposal=frame.disposalType||0;
@@ -205,12 +207,18 @@ convert.addEventListener('click',async()=>{
 
     msg('Animated WebPを組み立て中…');
     const blob=buildAnimatedWebP(encoded,w,h,getGifLoopCount(buffer));
+    if(blob.size>MAX_OUTPUT_SIZE){
+      if(outputURL){URL.revokeObjectURL(outputURL);outputURL=null}
+      download.style.display='none';download.removeAttribute('href');
+      preview.src=inputURL;
+      throw new Error(`512KBを超えました (${(blob.size/1024).toFixed(1)} KiB)`);
+    }
     if(outputURL)URL.revokeObjectURL(outputURL);
     outputURL=URL.createObjectURL(blob);
     const base=(sourceFile.name||'animation').replace(/\.[^.]+$/,'');
     download.href=outputURL;download.download=`${base}.webp`;download.style.display='inline-block';
     preview.src=outputURL;drop.classList.add('has');
-    msg(`${frames.length}フレーム / ${w}×${h} / ${(blob.size/1024).toFixed(1)} KiB`);
+    msg(`${frames.length}フレーム / ${w}×${h} / 品質${WEBP_QUALITY} / ${(blob.size/1024).toFixed(1)} KiB`);
   }catch(e){console.error(e);msg(e?.message||'変換失敗',true)}finally{convert.disabled=false}
 });
 </script>
