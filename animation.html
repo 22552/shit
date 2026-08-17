@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d0f13">
+<title>Animated WebP Converter</title>
+<style>
+:root{color-scheme:dark;--bg:#0d0f13;--card:#171a20;--line:#2b3039;--text:#f6f7fb;--muted:#98a2b3;--a:#ffad1f;--a2:#ff7618;--bad:#ff8787}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% -10%,#262a33 0,transparent 35%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:grid;place-items:center}
+main{width:min(720px,100%);padding:16px}
+.card{background:#171a20ed;border:1px solid var(--line);border-radius:24px;padding:16px;box-shadow:0 24px 80px #0006}
+.drop{min-height:300px;border:2px dashed #454c58;border-radius:20px;display:grid;place-items:center;text-align:center;padding:20px;cursor:pointer;overflow:hidden;transition:.15s}
+.drop.drag{border-color:var(--a);background:#ffad1f0b}
+.preview-wrap{display:none;position:relative;max-width:100%}
+.preview-wrap img{display:block;max-width:100%;max-height:65dvh;width:auto;height:auto;object-fit:contain;border-radius:14px}
+.drop.has .preview-wrap{display:block}.drop.has .empty{display:none}
+.reset-image{position:absolute;top:8px;right:8px;width:32px;height:32px;min-width:0;padding:0;display:grid;place-items:center;border-radius:50%;background:#111a;color:#e4e7ec;font-size:22px;font-weight:500;line-height:1;box-shadow:0 2px 12px #0008;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.reset-image:hover{background:#222d;color:#fff}
+input[type=file]{display:none}
+.empty{color:var(--muted);font-weight:700}
+.empty small{display:block;margin-top:8px;color:#747e8e;font-weight:600}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+button,a{border:0;border-radius:999px;padding:13px 18px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}
+button{flex:1;min-width:180px;background:linear-gradient(135deg,var(--a),var(--a2));color:#171007}
+button:disabled{opacity:.45;cursor:not-allowed}
+.download{display:none;background:#f0f3f7;color:#111}
+.note{margin-top:12px;color:#747e8e;font-size:11px;text-align:center}
+.status{min-height:1.3em;margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
+.gh{position:fixed;right:10px;bottom:8px;padding:3px 5px;color:#707887;font-size:10px;font-weight:500;opacity:.65}
+.gh:hover{opacity:1;color:#aeb6c3}
+</style>
+</head>
+<body>
+<main>
+<section class="card">
+<label id="drop" class="drop" for="file">
+<input id="file" type="file" accept="image/gif,.gif">
+<div class="empty">GIFを選択<small>Animated WebPへ変換 / 最大480×480</small></div>
+<div class="preview-wrap">
+<img id="preview" alt="">
+<button id="resetImage" class="reset-image" type="button" aria-label="画像を削除">×</button>
+</div>
+</label>
+<div class="actions">
+<button id="convert" disabled>変換</button>
+<a id="download" class="download">保存</a>
+</div>
+<div class="note">縦横比を維持し、480pxを超えるGIFは自動縮小します。</div>
+<div id="status" class="status"></div>
+</section>
+</main>
+<a class="gh" href="https://github.com/22552" target="_blank" rel="noopener noreferrer">22552</a>
+<script type="module">
+const $=s=>document.querySelector(s);
+const file=$('#file'),drop=$('#drop'),preview=$('#preview'),resetImage=$('#resetImage'),convert=$('#convert'),download=$('#download'),status=$('#status');
+let sourceFile=null,inputURL=null,outputURL=null,libsPromise=null;
+
+['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',e=>{const f=e.dataTransfer.files?.[0];if(f)load(f)});
+file.addEventListener('change',()=>{const f=file.files?.[0];if(f)load(f)});
+resetImage.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();reset()});
+
+function msg(s,bad=false){status.textContent=s;status.style.color=bad?'var(--bad)':''}
+function reset(){
+  if(outputURL){URL.revokeObjectURL(outputURL);outputURL=null}
+  if(inputURL){URL.revokeObjectURL(inputURL);inputURL=null}
+  sourceFile=null;file.value='';preview.removeAttribute('src');drop.classList.remove('has');
+  download.style.display='none';download.removeAttribute('href');convert.disabled=true;msg('');
+}
+function load(f){
+  if(!/\.gif$/i.test(f.name)&&f.type!=='image/gif')return msg('GIFを選んでください',true);
+  sourceFile=f;convert.disabled=false;download.style.display='none';msg('');
+  if(outputURL){URL.revokeObjectURL(outputURL);outputURL=null}
+  if(inputURL)URL.revokeObjectURL(inputURL);
+  inputURL=URL.createObjectURL(f);preview.src=inputURL;drop.classList.add('has');
+}
+async function getLibs(){
+  if(!libsPromise){
+    libsPromise=Promise.all([
+      import('https://esm.sh/gifuct-js@2.1.2'),
+      import('https://esm.sh/@jsquash/webp@1.5.0')
+    ]).then(([gif,webp])=>{
+      const parseGIF=gif.parseGIF,decompressFrames=gif.decompressFrames;
+      const encode=webp.encode??webp.default?.encode??(typeof webp.default==='function'?webp.default:null);
+      if(typeof parseGIF!=='function'||typeof decompressFrames!=='function'||typeof encode!=='function')throw new Error('変換処理を読み込めません');
+      return {parseGIF,decompressFrames,encode};
+    }).catch(e=>{libsPromise=null;console.error(e);throw new Error('変換処理を読み込めません')});
+  }
+  return libsPromise;
+}
+
+function ascii(s){return new TextEncoder().encode(s)}
+function u16(n){return new Uint8Array([n&255,(n>>>8)&255])}
+function u24(n){return new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255])}
+function u32(n){const a=new Uint8Array(4);new DataView(a.buffer).setUint32(0,n>>>0,true);return a}
+function cat(...xs){const n=xs.reduce((a,b)=>a+b.length,0),o=new Uint8Array(n);let p=0;for(const x of xs){o.set(x,p);p+=x.length}return o}
+function chunk(tag,payload){return cat(ascii(tag),u32(payload.length),payload,(payload.length&1)?new Uint8Array([0]):new Uint8Array())}
+function tagAt(a,o){return String.fromCharCode(a[o],a[o+1],a[o+2],a[o+3])}
+
+function extractVP8L(buffer){
+  const a=new Uint8Array(buffer);
+  if(a.length<20||tagAt(a,0)!=='RIFF'||tagAt(a,8)!=='WEBP')throw new Error('WebPエンコード失敗');
+  let o=12;
+  while(o+8<=a.length){
+    const tag=tagAt(a,o),size=new DataView(a.buffer,a.byteOffset+o+4,4).getUint32(0,true),end=o+8+size;
+    if(end>a.length)break;
+    if(tag==='VP8L')return a.slice(o,end+(size&1));
+    o=end+(size&1);
+  }
+  throw new Error('VP8Lフレームを取得できません');
+}
+
+function getGifLoopCount(buffer){
+  const a=new Uint8Array(buffer),names=['NETSCAPE2.0','ANIMEXTS1.0'];
+  for(const name of names){
+    const n=ascii(name);
+    outer:for(let i=0;i+n.length+4<a.length;i++){
+      for(let j=0;j<n.length;j++)if(a[i+j]!==n[j])continue outer;
+      const p=i+n.length;
+      if(a[p]===3&&a[p+1]===1)return a[p+2]|(a[p+3]<<8);
+    }
+  }
+  return 1;
+}
+
+function buildAnimatedWebP(frames,w,h,loopCount){
+  if(!frames.length)throw new Error('フレームがありません');
+  if(w<1||h<1||w>16777216||h>16777216)throw new Error('画像サイズが不正です');
+  const vp8x=cat(new Uint8Array([0x12,0,0,0]),u24(w-1),u24(h-1));
+  const anim=cat(new Uint8Array([0,0,0,0]),u16(Math.max(0,Math.min(65535,loopCount))));
+  const anmfs=[];
+  for(const frame of frames){
+    const duration=Math.max(1,Math.min(16777215,Math.round(frame.duration||100)));
+    const header=cat(u24(0),u24(0),u24(w-1),u24(h-1),u24(duration),new Uint8Array([0x02]));
+    anmfs.push(chunk('ANMF',cat(header,frame.vp8l)));
+  }
+  const body=cat(chunk('VP8X',vp8x),chunk('ANIM',anim),...anmfs);
+  const payload=cat(ascii('WEBP'),body);
+  return new Blob([ascii('RIFF'),u32(payload.length),payload],{type:'image/webp'});
+}
+
+function isGif(buffer){
+  const a=new Uint8Array(buffer);
+  if(a.length<6)return false;
+  const h=String.fromCharCode(...a.slice(0,6));
+  return h==='GIF87a'||h==='GIF89a';
+}
+
+convert.addEventListener('click',async()=>{
+  if(!sourceFile)return;
+  convert.disabled=true;download.style.display='none';msg('GIFを解析中…');
+  try{
+    const buffer=await sourceFile.arrayBuffer();
+    if(!isGif(buffer))throw new Error('GIFファイルではありません');
+    const {parseGIF,decompressFrames,encode}=await getLibs();
+    const parsed=parseGIF(buffer),frames=decompressFrames(parsed,true);
+    if(!frames.length)throw new Error('GIFのフレームを読み込めません');
+    const sw=parsed.lsd?.width,sh=parsed.lsd?.height;
+    if(!sw||!sh)throw new Error('GIFのサイズを取得できません');
+
+    const scale=Math.min(1,480/sw,480/sh);
+    const w=Math.max(1,Math.round(sw*scale)),h=Math.max(1,Math.round(sh*scale));
+    const sourceCanvas=document.createElement('canvas');sourceCanvas.width=sw;sourceCanvas.height=sh;
+    const sourceCtx=sourceCanvas.getContext('2d',{alpha:true,willReadFrequently:true});
+    const patchCanvas=document.createElement('canvas'),patchCtx=patchCanvas.getContext('2d',{alpha:true});
+    const outCanvas=document.createElement('canvas');outCanvas.width=w;outCanvas.height=h;
+    const outCtx=outCanvas.getContext('2d',{alpha:true,willReadFrequently:true});
+    outCtx.imageSmoothingEnabled=true;outCtx.imageSmoothingQuality='high';
+
+    let previousDisposal=0,previousDims=null,restoreBeforePrevious=null;
+    const encoded=[];
+    for(let i=0;i<frames.length;i++){
+      const frame=frames[i];
+      if(i>0){
+        if(previousDisposal===2&&previousDims){
+          sourceCtx.clearRect(previousDims.left,previousDims.top,previousDims.width,previousDims.height);
+        }else if(previousDisposal===3&&restoreBeforePrevious){
+          sourceCtx.putImageData(restoreBeforePrevious,0,0);
+        }
+      }
+
+      let restoreForThis=null;
+      if(frame.disposalType===3)restoreForThis=sourceCtx.getImageData(0,0,sw,sh);
+      const d=frame.dims;
+      patchCanvas.width=d.width;patchCanvas.height=d.height;
+      patchCtx.clearRect(0,0,d.width,d.height);
+      patchCtx.putImageData(new ImageData(frame.patch,d.width,d.height),0,0);
+      sourceCtx.drawImage(patchCanvas,d.left,d.top);
+
+      outCtx.clearRect(0,0,w,h);
+      outCtx.drawImage(sourceCanvas,0,0,sw,sh,0,0,w,h);
+      msg(`変換中… ${i+1}/${frames.length}`);
+      await new Promise(requestAnimationFrame);
+      const imageData=outCtx.getImageData(0,0,w,h);
+      const staticBuffer=await encode(imageData,{lossless:1,quality:100,method:4,exact:1,near_lossless:100,alpha_quality:100});
+      encoded.push({vp8l:extractVP8L(staticBuffer),duration:frame.delay||100});
+
+      previousDisposal=frame.disposalType||0;
+      previousDims=d;
+      restoreBeforePrevious=restoreForThis;
+    }
+
+    msg('Animated WebPを組み立て中…');
+    const blob=buildAnimatedWebP(encoded,w,h,getGifLoopCount(buffer));
+    if(outputURL)URL.revokeObjectURL(outputURL);
+    outputURL=URL.createObjectURL(blob);
+    const base=(sourceFile.name||'animation').replace(/\.[^.]+$/,'');
+    download.href=outputURL;download.download=`${base}.webp`;download.style.display='inline-block';
+    preview.src=outputURL;drop.classList.add('has');
+    msg(`${frames.length}フレーム / ${w}×${h} / ${(blob.size/1024).toFixed(1)} KiB`);
+  }catch(e){console.error(e);msg(e?.message||'変換失敗',true)}finally{convert.disabled=false}
+});
+</script>
+</body>
+</html>
