@@ -47,7 +47,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <button id="convert" disabled>変換</button>
 <a id="download" class="download">保存</a>
 </div>
-<div class="note">最大480×480 / 512KB以下になる範囲で最高画質（品質80以上）</div>
+<div class="note">品質80固定 / まず最大480×480で変換し、512KBを超えた場合だけ自動縮小します。</div>
 <div id="status" class="status"></div>
 </section>
 </main>
@@ -56,7 +56,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 const $=s=>document.querySelector(s);
 const file=$('#file'),drop=$('#drop'),preview=$('#preview'),resetImage=$('#resetImage'),convert=$('#convert'),download=$('#download'),status=$('#status');
 const MAX_OUTPUT_SIZE=512*1024;
-const QUALITY_CANDIDATES=[100,95,90,85,80];
+const WEBP_QUALITY=80;
+const MAX_SIDE_CANDIDATES=[480,448,416,384,352,320,288,256,224,192,160,128,96,64,48,32];
 let sourceFile=null,inputURL=null,outputURL=null,libsPromise=null;
 
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag')}));
@@ -151,7 +152,7 @@ function isGif(buffer){
   return h==='GIF87a'||h==='GIF89a';
 }
 
-async function encodeAnimation(frames,encode,sw,sh,w,h,loopCount,quality){
+async function encodeAnimation(frames,encode,sw,sh,w,h,loopCount){
   const sourceCanvas=document.createElement('canvas');sourceCanvas.width=sw;sourceCanvas.height=sh;
   const sourceCtx=sourceCanvas.getContext('2d',{alpha:true,willReadFrequently:true});
   const patchCanvas=document.createElement('canvas'),patchCtx=patchCanvas.getContext('2d',{alpha:true});
@@ -181,10 +182,10 @@ async function encodeAnimation(frames,encode,sw,sh,w,h,loopCount,quality){
 
     outCtx.clearRect(0,0,w,h);
     outCtx.drawImage(sourceCanvas,0,0,sw,sh,0,0,w,h);
-    msg(`品質${quality}で変換中… ${i+1}/${frames.length}`);
+    msg(`${w}×${h} / 品質${WEBP_QUALITY}で変換中… ${i+1}/${frames.length}`);
     await new Promise(requestAnimationFrame);
     const imageData=outCtx.getImageData(0,0,w,h);
-    const staticBuffer=await encode(imageData,{lossless:1,quality,method:4,exact:1,near_lossless:quality,alpha_quality:100});
+    const staticBuffer=await encode(imageData,{lossless:1,quality:WEBP_QUALITY,method:4,exact:1,near_lossless:WEBP_QUALITY,alpha_quality:100});
     encoded.push({vp8l:extractVP8L(staticBuffer),duration:frame.delay||100});
 
     previousDisposal=frame.disposalType||0;
@@ -205,24 +206,26 @@ convert.addEventListener('click',async()=>{
     if(!frames.length)throw new Error('GIFのフレームを読み込めません');
     const sw=parsed.lsd?.width,sh=parsed.lsd?.height;
     if(!sw||!sh)throw new Error('GIFのサイズを取得できません');
-
-    const scale=Math.min(1,480/sw,480/sh);
-    const w=Math.max(1,Math.round(sw*scale)),h=Math.max(1,Math.round(sh*scale));
     const loopCount=getGifLoopCount(buffer);
 
-    let blob=null,usedQuality=null,lastSize=0;
-    for(const quality of QUALITY_CANDIDATES){
-      blob=await encodeAnimation(frames,encode,sw,sh,w,h,loopCount,quality);
+    let blob=null,usedW=0,usedH=0,lastSize=0,lastKey='';
+    for(const maxSide of MAX_SIDE_CANDIDATES){
+      const scale=Math.min(1,maxSide/sw,maxSide/sh);
+      const w=Math.max(1,Math.round(sw*scale)),h=Math.max(1,Math.round(sh*scale));
+      const key=`${w}x${h}`;
+      if(key===lastKey)continue;
+      lastKey=key;
+      blob=await encodeAnimation(frames,encode,sw,sh,w,h,loopCount);
       lastSize=blob.size;
-      if(blob.size<=MAX_OUTPUT_SIZE){usedQuality=quality;break}
-      msg(`品質${quality}: ${(blob.size/1024).toFixed(1)} KiB — 512KBを超えたため再圧縮…`);
+      if(blob.size<=MAX_OUTPUT_SIZE){usedW=w;usedH=h;break}
+      msg(`${w}×${h}: ${(blob.size/1024).toFixed(1)} KiB — 512KBを超えたため縮小して再変換…`);
       await new Promise(requestAnimationFrame);
     }
 
-    if(usedQuality===null){
+    if(!usedW){
       if(outputURL){URL.revokeObjectURL(outputURL);outputURL=null}
       download.style.display='none';download.removeAttribute('href');preview.src=inputURL;
-      throw new Error(`品質80でも512KBを超えました (${(lastSize/1024).toFixed(1)} KiB)`);
+      throw new Error(`32pxまで縮小しても512KBを超えました (${(lastSize/1024).toFixed(1)} KiB)`);
     }
 
     if(outputURL)URL.revokeObjectURL(outputURL);
@@ -230,7 +233,7 @@ convert.addEventListener('click',async()=>{
     const base=(sourceFile.name||'animation').replace(/\.[^.]+$/,'');
     download.href=outputURL;download.download=`${base}.webp`;download.style.display='inline-block';
     preview.src=outputURL;drop.classList.add('has');
-    msg(`${frames.length}フレーム / ${w}×${h} / 品質${usedQuality} / ${(blob.size/1024).toFixed(1)} KiB`);
+    msg(`${frames.length}フレーム / ${usedW}×${usedH} / 品質${WEBP_QUALITY} / ${(blob.size/1024).toFixed(1)} KiB`);
   }catch(e){console.error(e);msg(e?.message||'変換失敗',true)}finally{convert.disabled=false}
 });
 </script>
