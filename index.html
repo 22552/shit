@@ -38,6 +38,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .status{min-height:1.3em;margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
 .gh{position:fixed;right:10px;bottom:8px;padding:3px 5px;color:#707887;font-size:10px;font-weight:500;opacity:.65}
 .gh:hover{opacity:1;color:#aeb6c3}
+.gh a{padding:0;border-radius:0;color:inherit;font-size:inherit;font-weight:inherit}
 </style>
 </head>
 <body>
@@ -76,7 +77,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div id="status" class="status"></div>
 </section>
 </main>
-<a class="gh" href="https://github.com/22552" target="_blank" rel="noopener noreferrer">22552</a>
+<nav class="gh"><a href="animation.html">Animation</a> | <a href="https://github.com/22552/shit" target="_blank" rel="noopener noreferrer">GitHub</a></nav>
 <script type="module">
 const $=s=>document.querySelector(s);
 const file=$('#file'),drop=$('#drop'),preview=$('#preview'),resetImage=$('#resetImage'),convert=$('#convert'),download=$('#download'),status=$('#status'),quality=$('#quality'),qualityValue=$('#qualityValue'),resize480=$('#resize480');
