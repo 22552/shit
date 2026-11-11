@@ -83,8 +83,8 @@ function load(f){
 async function getLibs(){
   if(!libsPromise){
     libsPromise=Promise.all([
-      import('https://esm.sh/gifuct-js@2.1.2'),
-      import('https://esm.sh/@jsquash/webp@1.5.0')
+      import('https://esm.sh/gifuct-js@2.1.2?bundle'),
+      import('https://esm.sh/@jsquash/webp@1.5.0?bundle')
     ]).then(([gif,webp])=>{
       const parseGIF=gif.parseGIF,decompressFrames=gif.decompressFrames;
       const encode=webp.encode??webp.default?.encode??(typeof webp.default==='function'?webp.default:null);
